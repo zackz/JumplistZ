@@ -6,20 +6,19 @@ https://github.com/zackz/JumplistZ
 #define UNICODE
 #define _UNICODE
 
-#include <stdio.h>
 #include <tchar.h>
 #include <windows.h>
-#include <shobjidl.h>
 #include <objbase.h>
 #include <Shlobj.h>
+#include <shobjidl.h>
 #include <Knownfolders.h>
-#include <Propvarutil.h>
 #include <propkey.h>
+#include <Propvarutil.h>
 
-#pragma comment(lib, "Shlwapi.lib")
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "Ole32.lib")
 #pragma comment(lib, "Shell32.lib")
+#pragma comment(lib, "Shlwapi.lib")
 
 const int CFG_MAX_COUNT = 100;
 const int CFG_VALUE_LEN = 1024;
@@ -250,17 +249,20 @@ void BuildJumplist(TCHAR * szINI)
 	pcdl->Release();
 }
 
-int wmain(int argc, wchar_t * argv[])
+int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
+	LPSTR lpCmdLine, int nCmdShow)
 {
+	LPTSTR szCommandLine = GetCommandLine();
+
 	// Get ini full path
-	TCHAR * pch = _tcsrchr(argv[0], _T('\\'));
-	_tcscpy(g_szAppName, pch ? pch + 1 : argv[0]);
+	TCHAR * pch = _tcsrchr(szCommandLine, _T('\\'));
+	_tcscpy(g_szAppName, pch ? pch + 1 : szCommandLine);
 	*_tcsrchr(g_szAppName, '.') = 0;  // Remove ".exe"
 
 	TCHAR szINI[MAX_PATH];
 	if (pch)
 	{
-		_tcsncpy_s(szINI, argv[0], pch - argv[0] + 1);
+		_tcsncpy_s(szINI, szCommandLine, pch - szCommandLine + 1);
 	}
 	else
 	{
@@ -273,11 +275,6 @@ int wmain(int argc, wchar_t * argv[])
 
 	// Read configuration
 	g_dwDebugBits = GetPrivateProfileInt(SECTION_PROPERTIES, CFGKEY_DEBUG_BITS, 0, szINI);
-
-	// Dump all argv
-	dbg(_T("argc:    %d"), argc);
-	for (int i = 0; i < argc; i++)
-		dbg(_T("argv[%d]: %s"), i, argv[i]);
 
 	// Initialize jumplist
 	if (SUCCEEDED(CoInitialize(NULL)))
