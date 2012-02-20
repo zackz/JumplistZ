@@ -1,3 +1,7 @@
+/*
+JumplistZ
+https://github.com/zackz/JumplistZ
+*/
 
 #define UNICODE
 #define _UNICODE
@@ -16,9 +20,6 @@
 #pragma comment(lib, "user32.lib")
 #pragma comment(lib, "Ole32.lib")
 #pragma comment(lib, "Shell32.lib")
-
-REFKNOWNFOLDERID TEMP_FOLDERID = FOLDERID_Templates;
-const TCHAR TEMP_FILE_PREFIX[] = _T("ZZZzzzzzzz");
 
 const int CFG_MAX_COUNT = 100;
 const int CFG_VALUE_LEN = 1024;
@@ -72,51 +73,6 @@ void GetCFGItem(DWORD nSection, DWORD nItem,
 	{
 		bufValue[0] = 0;
 	}
-}
-
-BOOL FindStrInList(TCHAR * str, TCHAR * plist)
-{
-	// The list includes multiple sequence strings, and the last one is empty.
-	for (TCHAR * pstr = plist; *pstr; pstr += _tcslen(pstr) + 1)
-	{
-		if (_tcsstr(pstr, str))
-			return TRUE;
-	}
-	return FALSE;
-}
-
-void GetTempFileName(TCHAR * bufRet, DWORD nSection, DWORD nItem)
-{
-	_stprintf(bufRet, _T("%s_%s_%02d%02d.JumplistZ"),
-		TEMP_FILE_PREFIX, g_szAppName, nSection, nItem);
-}
-
-int GetTempNamePrefixLen()
-{
-	// Length of "ZZZzzzzzzz_JumplistZ_"
-	return _tcslen(TEMP_FILE_PREFIX) + _tcslen(g_szAppName) + 2;
-}
-
-IShellItem * GetShellItem(DWORD nSection, DWORD nItem, TCHAR * szINI)
-{
-	TCHAR bufCMD[CFG_VALUE_LEN];
-	GetCFGItem(nSection, nItem, ITEM_SUFFIX_CMD, szINI, bufCMD);
-	if (_tcslen(bufCMD) == 0)
-		return NULL;
-
-	TCHAR bufName[MAX_PATH];
-	GetTempFileName(bufName, nSection, nItem);
-
-	FILE * f = _tfopen(bufName, _T("wb"));
-	fwrite(bufCMD, sizeof(bufCMD[0]), _tcslen(bufCMD) + 1, f);
-	fclose(f);
-
-	IShellItem * psi;
-	HRESULT hr = SHCreateItemInKnownFolder(
-		TEMP_FOLDERID, KF_FLAG_DEFAULT, bufName, IID_PPV_ARGS(&psi));
-	if (SUCCEEDED(hr))
-		return psi;
-	return NULL;
 }
 
 HRESULT SetTitle(IShellLink * psl, LPCTSTR szTitle)
@@ -242,8 +198,7 @@ void AddGroup(ICustomDestinationList * pcdl, DWORD nSection, TCHAR * szINI)
 
 	for (int k = 1; k < CFG_MAX_COUNT; k++)
 	{
-		IShellItem * psi = GetShellItem(nSection, k, szINI);
-		//~ IShellLink * psi = GetShellLink(nSection, k, szINI);
+		IShellLink * psi = GetShellLink(nSection, k, szINI);
 		if (psi)
 		{
 			dbg(_T("Shell object: 0x%08x"), psi);
@@ -287,122 +242,12 @@ void BuildJumplist(TCHAR * szINI)
 		return;
 	}
 
-	PWSTR temppath;
-	SHGetKnownFolderPath(TEMP_FOLDERID, KF_FLAG_DEFAULT, NULL, &temppath);
-	_tchdir(temppath);
-	CoTaskMemFree(temppath);
-
 	for (int i = 1; i < CFG_MAX_COUNT; i++)
 		AddGroup(pcdl, i, szINI);
 
 	pcdl->CommitList();
 	poaRemoved->Release();
 	pcdl->Release();
-}
-
-LPCTSTR GetTimeStr(const FILETIME * lpFileTime)
-{
-	static TCHAR buf[100];
-	SYSTEMTIME st;
-	if (FileTimeToSystemTime(lpFileTime, &st))
-	{
-		_stprintf(buf, _T("%04d-%02d-%02d %02d:%02d:%02d.%03d"),
-			st.wYear, st.wMonth, st.wDay,
-			st.wHour, st.wMinute, st.wSecond, st.wMilliseconds);
-		return buf;
-	}
-	return _T("");
-}
-
-BOOL FindLatestFile(LPCTSTR lpFileName, LPTSTR bufLatest)
-{
-	WIN32_FIND_DATA wfdLatest;
-	memset(&wfdLatest, 0, sizeof(wfdLatest));
-	WIN32_FIND_DATA wfd;
-	HANDLE h = FindFirstFile(lpFileName, &wfd);
-	while (h != INVALID_HANDLE_VALUE)
-	{
-		dbg(_T("%s, %s"), wfd.cFileName, GetTimeStr(&wfd.ftLastWriteTime));
-		if (CompareFileTime(&wfd.ftLastWriteTime, &wfdLatest.ftLastWriteTime) == 1)
-		{
-			wfdLatest = wfd;
-		}
-		if (!FindNextFile(h, &wfd))
-		{
-			FindClose(h);
-			break;
-		}
-	}
-	dbg(_T("Latest one:"));
-	dbg(_T("%s, %s"), wfdLatest.cFileName, GetTimeStr(&wfdLatest.ftLastWriteTime));
-	_tcscpy(bufLatest, wfdLatest.cFileName);
-	return TRUE;
-}
-
-void ChangeDisplayNames(TCHAR * szINI)
-{
-	dbg(_T("- ChangeDisplayNames"));
-
-	// Find latest "*.customDestinations-ms". And assume it was just edited one.
-	TCHAR szPath[MAX_PATH];
-	PWSTR pathRecent;
-	SHGetKnownFolderPath(FOLDERID_Recent, KF_FLAG_DEFAULT, NULL, &pathRecent);
-	_tcscpy(szPath, pathRecent);
-	CoTaskMemFree(pathRecent);
-	if (szPath[_tcslen(szPath) - 1] != '\\')
-		_tcscat(szPath, _T("\\"));
-	_tcscat(szPath, _T("CustomDestinations\\*.customDestinations-ms"));
-
-	TCHAR bufLatest[MAX_PATH];
-	FindLatestFile(szPath, bufLatest);
-	_tcscpy(_tcsrchr(szPath, _T('\\')) + 1, bufLatest);
-
-	// Read all file data
-	char buf[100 * 1024];
-	memset(buf, 0, sizeof(buf));
-	FILE * f = _tfopen(szPath, _T("r+b"));
-	size_t nLen = fread(buf, 1, sizeof(buf), f);
-	dbg(_T("Size: %d"), nLen);
-
-	// Trick, binary-->string
-	TCHAR bufPrefix[100];
-	_tcscpy(bufPrefix, TEMP_FILE_PREFIX);
-	for (char * p = (char *)bufPrefix; ((int)p % 2) || (*p || *(p + 1)); p++)
-		*p = *p ? *p : 1;
-	for (char * p = buf; p - buf < nLen; p++)
-		*p = *p ? *p : 1;
-
-	TCHAR * p = (TCHAR *)buf;
-	while (TRUE)
-	{
-		// Find index of original display name
-		TCHAR * p0 = _tcsstr(p, bufPrefix);
-		TCHAR * p1 = _tcsstr((TCHAR *)((char *)p + 1), bufPrefix);
-		p = min(p0, p1);
-		if (!p)
-			p = max(p0, p1);
-		if (!p)
-			break;
-
-		// Get section & item index from display name
-		// Such as "ZZZzzzzzzz_JumplistZ_0105.JumplistZ"
-		char * pch = (char *)p + GetTempNamePrefixLen() * 2;
-		int nSection = (*pch - '0') * 10 + (*(pch + 2) - '0');
-		pch += 4;
-		int nItem = (*pch - '0') * 10 + (*(pch + 2) - '0');
-
-		// Get new display name
-		TCHAR bufName[CFG_VALUE_LEN];;
-		GetCFGItem(nSection, nItem, ITEM_SUFFIX_NAME, szINI, bufName);
-		dbg(_T("Section: %2d, Item: %2d, New display name: <%s>"), nSection, nItem, bufName);
-
-		// Write name to file
-		if (0 == fseek(f, (char *)p - buf, SEEK_SET))
-			fwrite(bufName, 1, (_tcslen(bufName) + 1) * sizeof(bufName[0]), f);
-
-		p++;
-	}
-	fclose(f);
 }
 
 int wmain(int argc, wchar_t * argv[])
@@ -434,40 +279,11 @@ int wmain(int argc, wchar_t * argv[])
 	for (int i = 0; i < argc; i++)
 		dbg(_T("argv[%d]: %s"), i, argv[i]);
 
-	if (argc == 1)
+	// Initialize jumplist
+	if (SUCCEEDED(CoInitialize(NULL)))
 	{
-		// Initialize jumplist
-		if (SUCCEEDED(CoInitialize(NULL)))
-		{
-			BuildJumplist(szINI);
-			ChangeDisplayNames(szINI);
-			CoUninitialize();
-		}
-	}
-	else
-	{
-		// Run...
-
-		// Something wrong? Can't read argv[1], errno = 22
-		// So read CMD from ini
-		TCHAR * p = _tcsstr(argv[1], TEMP_FILE_PREFIX);
-		if (p)
-		{
-			char * pch = (char *)p + GetTempNamePrefixLen() * 2;
-			int nSection = (*pch - '0') * 10 + (*(pch + 2) - '0');
-			pch += 4;
-			int nItem = (*pch - '0') * 10 + (*(pch + 2) - '0');
-
-			// Get CMD from ini
-			TCHAR bufCMD[CFG_VALUE_LEN];
-			GetCFGItem(nSection, nItem, ITEM_SUFFIX_CMD, szINI, bufCMD);
-			dbg(_T("CMD: <%s>"), bufCMD);
-			_tsystem(bufCMD);
-			_tsystem(_T("pause"));
-		}
-
-		// After calling jumplist, display name had restored to file name.
-		ChangeDisplayNames(szINI);
+		BuildJumplist(szINI);
+		CoUninitialize();
 	}
 }
 
