@@ -13,6 +13,12 @@ if __name__ == '__main__':
 			o.write('\t"";\n');
 
 	# Build JumplistZ.exe
+	cpp = 'JumplistZ.cpp'
+	with open(cpp) as f:
+		txt = f.read()
+		name = re.findall(r'\s+NAME\[\]\s*=\s*_T\("(.*?)"', txt)
+		ver = re.findall(r'\s+VERSION\[\]\s*=\s*_T\("(.*?)"', txt)
+		fnout = '%s-%s.exe' % (name[0], ver[0])
 	sdkenv = r'C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.Cmd'
-	os.system(r'call "%s" /release /x86 /xp && cl JumplistZ.cpp' % sdkenv);
+	os.system(r'call "%s" /release /x86 /xp && cl %s /Fe%s' % (sdkenv, cpp, fnout));
 
