@@ -109,11 +109,11 @@ void SplitFileAndParameters(LPCTSTR szCMD, LPTSTR bufFile, LPTSTR bufParam)
 	}
 }
 
-HRESULT GetBrowserPath(LPTSTR bufPath)
+HRESULT GetDefaultAssocPath(LPCTSTR szExtra, LPTSTR bufPath)
 {
 	bufPath[0] = 0;
 	IEnumAssocHandlers * peah;
-	HRESULT hr = SHAssocEnumHandlers(_T(".html"), ASSOC_FILTER_RECOMMENDED, &peah);
+	HRESULT hr = SHAssocEnumHandlers(szExtra, ASSOC_FILTER_RECOMMENDED, &peah);
 	if (SUCCEEDED(hr))
 	{
 		IAssocHandler * pah;
@@ -180,11 +180,11 @@ IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 				break;
 		if (i < ARRAYSIZE(prefixes))
 		{
-			TCHAR bufBrowser[MAX_PATH];
-			hr = GetBrowserPath(bufBrowser);
+			TCHAR bufPath[MAX_PATH];
+			hr = GetDefaultAssocPath(_T(".html"), bufPath);
 			if (SUCCEEDED(hr))
 			{
-				hr = psl->SetIconLocation(bufBrowser, 0);
+				hr = psl->SetIconLocation(bufPath, 0);
 				if(!SUCCEEDED(hr)) break;
 			}
 		}
@@ -273,6 +273,26 @@ int AddGroup(ICustomDestinationList * pcdl, DWORD nSection, TCHAR * szINI)
 	return nObjects;
 }
 
+void AddTasks(ICustomDestinationList * pcdl, TCHAR * szINI)
+{
+	IObjectCollection * poc;
+	HRESULT hr = CoCreateInstance(CLSID_EnumerableObjectCollection,
+		NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&poc));
+	if (SUCCEEDED(hr))
+	{
+		TCHAR bufPath[MAX_PATH];
+		GetDefaultAssocPath(_T(".ini"), bufPath);
+		TCHAR bufCMD[MAX_PATH];
+		_stprintf(bufCMD, _T("%s %s"), bufPath, szINI);
+
+		IShellLink * psl;
+		psl = GetShellLink(_T("Edit configuration"), bufCMD);
+		if (psl)
+			poc->AddObject(psl);
+		pcdl->AddUserTasks(poc);
+	}
+}
+
 int BuildJumplist(TCHAR * szINI)
 {
 	dbg(_T("- BuildJumplist"));
@@ -292,12 +312,17 @@ int BuildJumplist(TCHAR * szINI)
 	if (!SUCCEEDED(hr))
 	{
 		err(_T("Error call BeginList, hr = 0x%08x"), hr);
+		pcdl->Release();
 		return 0;
 	}
 
+	// Category
 	int nObjects = 0;
 	for (int i = 1; i < CFG_MAX_COUNT; i++)
 		nObjects += AddGroup(pcdl, i, szINI);
+
+	// Tasks
+	AddTasks(pcdl, szINI);
 
 	pcdl->CommitList();
 	poaRemoved->Release();
