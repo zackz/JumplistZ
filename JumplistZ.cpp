@@ -78,26 +78,6 @@ void GetCFGItem(DWORD nSection, DWORD nItem,
 	}
 }
 
-HRESULT SetTitle(IShellLink * psl, LPCTSTR szTitle)
-{
-	IPropertyStore * pps;
-	HRESULT hr = psl->QueryInterface(IID_PPV_ARGS(&pps));
-	if (SUCCEEDED(hr))
-	{
-		PROPVARIANT pv;
-		hr = InitPropVariantFromString(szTitle, &pv);
-		if (SUCCEEDED(hr))
-		{
-			hr = pps->SetValue(PKEY_Title, pv);
-			if (SUCCEEDED(hr))
-				hr = pps->Commit();
-			PropVariantClear(&pv);
-		}
-		pps->Release();
-	}
-	return hr;
-}
-
 void SplitFileAndParameters(LPCTSTR szCMD, LPTSTR bufFile, LPTSTR bufParam)
 {
 	const TCHAR * pFile = szCMD;
@@ -129,20 +109,57 @@ void SplitFileAndParameters(LPCTSTR szCMD, LPTSTR bufFile, LPTSTR bufParam)
 	}
 }
 
-IShellLink * GetShellLink(DWORD nSection, DWORD nItem, TCHAR * szINI)
+HRESULT GetBrowserPath(LPTSTR bufPath)
 {
-	TCHAR bufCMD[CFG_VALUE_LEN];
-	GetCFGItem(nSection, nItem, ITEM_SUFFIX_CMD, szINI, bufCMD);
-	if (_tcslen(bufCMD) == 0)
-		return NULL;
-	TCHAR bufName[CFG_VALUE_LEN];
-	GetCFGItem(nSection, nItem, ITEM_SUFFIX_NAME, szINI, bufName);
-	dbg(_T("GetShellLink, section: %d, item: %d"), nSection, nItem);
+	bufPath[0] = 0;
+	IEnumAssocHandlers * peah;
+	HRESULT hr = SHAssocEnumHandlers(_T(".html"), ASSOC_FILTER_RECOMMENDED, &peah);
+	if (SUCCEEDED(hr))
+	{
+		IAssocHandler * pah;
+		hr = peah->Next(1, &pah, NULL);
+		if (SUCCEEDED(hr))
+		{
+			LPWSTR name;
+			hr = pah->GetName(&name);
+			if (SUCCEEDED(hr))
+			{
+				_tcscpy(bufPath, name);
+				CoTaskMemFree(name);
+			}
+			pah->Release();
+		}
+		peah->Release();
+	}
+	return hr;
+}
 
+HRESULT SetTitle(IShellLink * psl, LPCTSTR szTitle)
+{
+	IPropertyStore * pps;
+	HRESULT hr = psl->QueryInterface(IID_PPV_ARGS(&pps));
+	if (SUCCEEDED(hr))
+	{
+		PROPVARIANT pv;
+		hr = InitPropVariantFromString(szTitle, &pv);
+		if (SUCCEEDED(hr))
+		{
+			hr = pps->SetValue(PKEY_Title, pv);
+			if (SUCCEEDED(hr))
+				hr = pps->Commit();
+			PropVariantClear(&pv);
+		}
+		pps->Release();
+	}
+	return hr;
+}
+
+IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
+{
 	TCHAR bufFile[CFG_VALUE_LEN];
 	TCHAR bufParam[CFG_VALUE_LEN];
-	SplitFileAndParameters(bufCMD, bufFile, bufParam);
-	dbg(_T("-Name: <%s>"), bufName);
+	SplitFileAndParameters(szCMD, bufFile, bufParam);
+	dbg(_T("-Name: <%s>"), szName);
 	dbg(_T("-CMD:  <%s>, <%s>"), bufFile, bufParam);
 
 	HRESULT hr = 0;
@@ -156,16 +173,34 @@ IShellLink * GetShellLink(DWORD nSection, DWORD nItem, TCHAR * szINI)
 		hr = psl->SetPath(bufFile);
 		if(!SUCCEEDED(hr)) break;
 
-		hr = psl->SetIconLocation(bufFile, 0);
-		if(!SUCCEEDED(hr)) break;
+		LPCTSTR prefixes[] = {_T("http://"), _T("https://")};
+		int i = 0;
+		for (; i < ARRAYSIZE(prefixes); i++)
+			if (0 == _tcsncicmp(bufFile, prefixes[i], sizeof(prefixes[i])))
+				break;
+		if (i < ARRAYSIZE(prefixes))
+		{
+			TCHAR bufBrowser[MAX_PATH];
+			hr = GetBrowserPath(bufBrowser);
+			if (SUCCEEDED(hr))
+			{
+				hr = psl->SetIconLocation(bufBrowser, 0);
+				if(!SUCCEEDED(hr)) break;
+			}
+		}
+		else
+		{
+			hr = psl->SetIconLocation(bufFile, 0);
+			if(!SUCCEEDED(hr)) break;
+		}
 
 		hr = psl->SetArguments(bufParam);
 		if(!SUCCEEDED(hr)) break;
 
-		hr = SetTitle(psl, bufName);
+		hr = SetTitle(psl, szName);
 		if(!SUCCEEDED(hr)) break;
 
-		hr = psl->SetDescription(bufCMD);
+		hr = psl->SetDescription(szCMD);
 		if(!SUCCEEDED(hr)) break;
 
 		TCHAR bufPath[MAX_PATH];
@@ -178,6 +213,18 @@ IShellLink * GetShellLink(DWORD nSection, DWORD nItem, TCHAR * szINI)
 	}
 	dbg(_T("Error call GetShellItem_link, hr: 0x%08x"), hr);
 	return NULL;
+}
+
+IShellLink * GetShellLink(DWORD nSection, DWORD nItem, TCHAR * szINI)
+{
+	TCHAR bufCMD[CFG_VALUE_LEN];
+	GetCFGItem(nSection, nItem, ITEM_SUFFIX_CMD, szINI, bufCMD);
+	if (_tcslen(bufCMD) == 0)
+		return NULL;
+	TCHAR bufName[CFG_VALUE_LEN];
+	GetCFGItem(nSection, nItem, ITEM_SUFFIX_NAME, szINI, bufName);
+	dbg(_T("GetShellLink, section: %d, item: %d"), nSection, nItem);
+	return GetShellLink(bufName, bufCMD);
 }
 
 int AddGroup(ICustomDestinationList * pcdl, DWORD nSection, TCHAR * szINI)
