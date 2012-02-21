@@ -289,6 +289,10 @@ void AddTasks(ICustomDestinationList * pcdl, TCHAR * szINI)
 		psl = GetShellLink(_T("Edit configuration"), bufCMD);
 		if (psl)
 			poc->AddObject(psl);
+		psl = GetShellLink(
+			_T("About JumplistZ"), _T("https://github.com/zackz/JumplistZ"));
+		if (psl)
+			poc->AddObject(psl);
 		pcdl->AddUserTasks(poc);
 	}
 }
