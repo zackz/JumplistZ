@@ -22,7 +22,7 @@ https://github.com/zackz/JumplistZ
 #pragma comment(lib, "Shlwapi.lib")
 
 const TCHAR NAME[]                = _T("JumplistZ");
-const TCHAR VERSION[]             = _T("0.5");
+const TCHAR VERSION[]             = _T("0.5.1");
 const TCHAR CFGKEY_DEBUG_BITS[]   = _T("DEBUG_BITS");
 const TCHAR CFGKEY_GROUP_NAME[]   = _T("GROUP_DISPLAY_NAME");
 const TCHAR SECTION_PROPERTIES[]  = _T("PROPERTIES");

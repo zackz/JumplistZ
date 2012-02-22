@@ -1,8 +1,8 @@
 #include "winver.h"
 
-#define VER_FILEVERSION             0,5,0,0
+#define VER_FILEVERSION             0, 5, 1, 0
 #define VER_FILEVERSION_STR         "0.5.0.0\0"
-#define VER_PRODUCTVERSION          0,5,0,0
+#define VER_PRODUCTVERSION          0, 5, 1, 0
 #define VER_PRODUCTVERSION_STR      "0.5\0"
 
 // "arrow-up-2.ico" came from "Oxygen Icons 4.3.1 (KDE) (oxygen)"
@@ -11,13 +11,13 @@ APPICON    ICON  "res\\arrow-up-2.ico"
 SMAPLEINI  BIN   "JumplistZ.sample.ini"
 
 VS_VERSION_INFO VERSIONINFO
-FILEVERSION 0,5
+FILEVERSION VER_FILEVERSION
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
         BLOCK "040904E4"
         BEGIN
-            VALUE "CompanyName",      "Zack Zhou\0"
+            VALUE "CompanyName",      "zackz\0"
             VALUE "FileDescription",  "Jumplist creator\0"
             VALUE "FileVersion",      VER_FILEVERSION_STR
             VALUE "LegalCopyright",   "https://github.com/zackz/JumplistZ\0"
