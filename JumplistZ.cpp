@@ -169,10 +169,10 @@ IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 		IShellLink * psl;
 		hr = CoCreateInstance(
 			CLSID_ShellLink, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&psl));
-		if(!SUCCEEDED(hr)) break;
+		if (FAILED(hr)) break;
 
 		hr = psl->SetPath(bufFile);
-		if(!SUCCEEDED(hr)) break;
+		if (FAILED(hr)) break;
 
 		LPCTSTR prefixes[] = {_T("http://"), _T("https://")};
 		int i = 0;
@@ -186,29 +186,29 @@ IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 			if (SUCCEEDED(hr))
 			{
 				hr = psl->SetIconLocation(bufPath, 0);
-				if(!SUCCEEDED(hr)) break;
+				if (FAILED(hr)) break;
 			}
 		}
 		else
 		{
 			hr = psl->SetIconLocation(bufFile, 0);
-			if(!SUCCEEDED(hr)) break;
+			if (FAILED(hr)) break;
 		}
 
 		hr = psl->SetArguments(bufParam);
-		if(!SUCCEEDED(hr)) break;
+		if (FAILED(hr)) break;
 
 		hr = SetTitle(psl, szName);
-		if(!SUCCEEDED(hr)) break;
+		if (FAILED(hr)) break;
 
 		hr = psl->SetDescription(szCMD);
-		if(!SUCCEEDED(hr)) break;
+		if (FAILED(hr)) break;
 
 		TCHAR bufPath[MAX_PATH];
 		if (SHGetSpecialFolderPath(0, bufPath, CSIDL_PROFILE, FALSE))
 		{
 			hr = psl->SetWorkingDirectory(bufPath);
-			if(!SUCCEEDED(hr)) break;
+			if (FAILED(hr)) break;
 		}
 		return psl;
 	}
@@ -244,7 +244,7 @@ int AddGroup(ICustomDestinationList * pcdl, DWORD nSection, TCHAR * szINI)
 	IObjectCollection * poc;
 	HRESULT hr = CoCreateInstance(CLSID_EnumerableObjectCollection,
 		NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&poc));
-	if (!SUCCEEDED(hr))
+	if (FAILED(hr))
 		return 0;
 
 	for (int k = 1; k < CFG_MAX_COUNT; k++)
@@ -265,7 +265,7 @@ int AddGroup(ICustomDestinationList * pcdl, DWORD nSection, TCHAR * szINI)
 	if (SUCCEEDED(hr))
 	{
 		hr = pcdl->AppendCategory(bufGroupName, poa);
-		if (!SUCCEEDED(hr))
+		if (FAILED(hr))
 			dbg(_T("Error call AppendCategory, %s, hr: 0x%08x"), bufGroupName, hr);
 		hr = poa->GetCount(&nObjects);
 		poa->Release();
@@ -305,7 +305,7 @@ int BuildJumplist(TCHAR * szINI)
 	ICustomDestinationList * pcdl;
 	HRESULT hr = CoCreateInstance(
 		CLSID_DestinationList, NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&pcdl));
-	if (!SUCCEEDED(hr))
+	if (FAILED(hr))
 	{
 		err(_T("Error call CoCreateInstance, CLSID_DestinationList, hr = 0x%08x"), hr);
 		return 0;
@@ -314,7 +314,7 @@ int BuildJumplist(TCHAR * szINI)
 	UINT uMaxSlots;
 	IObjectArray * poaRemoved;  // Not care, should remove it in INI file.
 	hr = pcdl->BeginList(&uMaxSlots, IID_PPV_ARGS(&poaRemoved));
-	if (!SUCCEEDED(hr))
+	if (FAILED(hr))
 	{
 		err(_T("Error call BeginList, hr = 0x%08x"), hr);
 		pcdl->Release();
