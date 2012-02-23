@@ -203,11 +203,14 @@ IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 		if (FAILED(hr)) break;
 
 		TCHAR bufPath[MAX_PATH];
-		if (SHGetSpecialFolderPath(0, bufPath, CSIDL_PROFILE, FALSE))
-		{
-			hr = psl->SetWorkingDirectory(bufPath);
-			if (FAILED(hr)) break;
-		}
+		_tcscpy(bufPath, bufFile);
+		TCHAR * pch = _tcsrchr(bufPath, _T('\\'));
+		if (pch)
+			*pch = 0;
+		else
+			SHGetSpecialFolderPath(0, bufPath, CSIDL_PROFILE, FALSE);
+		hr = psl->SetWorkingDirectory(bufPath);
+		if (FAILED(hr)) break;
 		return psl;
 	}
 	dbg(_T("Error call GetShellItem_link, hr: 0x%08x"), hr);
