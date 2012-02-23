@@ -50,5 +50,5 @@ Tips
 
 * Make multiple JumplistZ on taskbar at the same time.
   * Put JumplistZ in different folder or make different name and edit ini file differently.
-* Ust `WinKey + Alt + [N]` to show jumplist.
+* Ust `WinKey`+`Alt`+`[N]` to show jumplist.
 
