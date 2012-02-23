@@ -26,7 +26,9 @@ In ini file:
 * Try CMD on console first:
   * Open cmd.exe, and run "start YOUR_CMD"
 
-(After updating configurations run JumplistZ again to generate new jumplist.)
+(After updating configurations run JumplistZ again to generate new jumplist. The
+configuration file is just plain text, and CMD line will be shown as tooltip in
+jumplist. So don't write any important password in this file.)
 
 ```ini
 [GROUP10]
@@ -36,7 +38,7 @@ ITEM10_CMD  = %windir%\system32\SnippingTool.exe
 ITEM20_NAME = Print route (IPv4)
 ITEM20_CMD  = %ComSpec% /c route print -4 & pause
 ITEM30_NAME = PuTTY, SavedSession
-ITEM30_CMD  = ""C:\Users\Z1202\Desktop\putty\PUTTY.EXE" -load "SavedSession" -pw "1234567890""
+ITEM30_CMD  = ""c:\putty\PUTTY.EXE" -load "SavedSession" -pw "1234567890""
 [GROUP20]
 GROUP_DISPLAY_NAME = Sample Urls
 ITEM10_NAME = Welcome to my github
