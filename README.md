@@ -21,10 +21,10 @@ file except extended name is ini.
 
 In ini file:
 
-* Keys with suffix "_NAME" will display on jumplist.
-* Keys with suffix "_CMD" is command which jumplist triggered.
+* Keys with suffix `_NAME` will display on jumplist.
+* Keys with suffix `_CMD` is command which jumplist triggered.
 * Try CMD on console first:
-  * Open cmd.exe, and run "start YOUR_CMD"
+  * Open cmd.exe, and run `start YOUR_CMD`
 
 (After updating configurations run JumplistZ again to generate new jumplist. The
 configuration file is just plain text, and CMD line will be shown as tooltip in
@@ -50,5 +50,5 @@ Tips
 
 * Make multiple JumplistZ on taskbar at the same time.
   * Put JumplistZ in different folder or make different name and edit ini file differently.
-* Ust winkey+alt+[N] to show jumplist.
+* Ust `winkey+alt+[N]` to show jumplist.
 
