@@ -25,10 +25,7 @@ In ini file:
 * Keys with suffix `_CMD` is command which jumplist triggered.
 * Try CMD on console first:
   * Open cmd.exe, and run `start YOUR_CMD`
-
-(After updating configurations run JumplistZ again to generate new jumplist. The
-configuration file is just plain text, and CMD line will be shown as tooltip in
-jumplist. So don't write any important password in this file.)
+* Displayed items are sorted by N in GROUP[N] and ITME[N], and 1 <= N < 100
 
 ```ini
 [GROUP10]
@@ -45,10 +42,16 @@ ITEM10_NAME = Welcome to my github
 ITEM10_CMD  = https://github.com/zackz
 ```
 
+Run JumplistZ again to generate new jumplist after updating configurations.
+Configuration file is just plain text, and CMD line will be shown as tooltip in
+jumplist. So don't write any important password in this file.
+
 Tips
 ====
 
 * Make multiple JumplistZ on taskbar at the same time.
   * Put JumplistZ in different folder or make different name and edit ini file differently.
 * Use `WinKey`+`Alt`+`[N]` to show jumplist.
-
+* Change number of jumplist items (default is 10)
+  * `Taskbar and Start Menu Properties` --> `Start Menu` --> `Customize...` -->
+`Number of recent items to display in Jump Lists`
