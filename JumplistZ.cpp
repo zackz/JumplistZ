@@ -114,6 +114,103 @@ void AddBackslash(LPTSTR bufPath)
 		_tcscat(bufPath, _T("\\"));
 }
 
+BOOL ShellCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
+{
+	BOOL bRet = FALSE;
+	HANDLE hOutRead = 0;
+	HANDLE hOutWrite = 0;
+	*bufOut = 0;
+	while (TRUE)
+	{
+		SECURITY_ATTRIBUTES sa;
+		sa.nLength              = sizeof(SECURITY_ATTRIBUTES);
+		sa.lpSecurityDescriptor = NULL;
+		sa.bInheritHandle       = TRUE;
+		bRet = CreatePipe(&hOutRead, &hOutWrite, &sa, 0);
+		if (!bRet)
+		{
+			dbg(_T("Error: CreatePipe"));
+			break;
+		}
+
+		STARTUPINFO si;
+		memset(&si, 0, sizeof(si));
+		si.dwFlags     = STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW;
+		si.hStdOutput  = hOutWrite;
+		si.hStdError   = hOutWrite;
+		si.wShowWindow = SW_HIDE;
+
+		LPCTSTR pComSpec = _tgetenv(_T("ComSpec"));
+		if (!pComSpec)
+		{
+			dbg(_T("Error: Can't get path of cmd.exe"));
+			break;
+		}
+
+		TCHAR bufCMD[MAX_PATH] = _T("/c ");
+		_tcscat(bufCMD, szCMD);
+		PROCESS_INFORMATION pi;
+		bRet = CreateProcess(pComSpec, bufCMD,
+			NULL, NULL, TRUE, 0, NULL, NULL, &si, &pi);
+		if (!bRet)
+		{
+			dbg(_T("Error: CreateProcess, %d"), GetLastError());
+			break;
+		}
+		CloseHandle(hOutWrite);
+		hOutWrite = 0;
+
+		LPBYTE pBuf = bufOut;
+		DWORD dwBufLen = *pdwLen;
+		dwBufLen--;  // Save for null terminator
+		while (dwBufLen > 0)
+		{
+			DWORD dwRead;
+			bRet = ReadFile(hOutRead, pBuf, dwBufLen, &dwRead, NULL);
+			dbg(_T("CMD output: %d, %d, %d"), bRet, GetLastError(), dwRead);
+			if (!bRet)
+				break;
+			pBuf += dwRead;
+			dwBufLen -= dwRead;
+		}
+		*pBuf = 0;
+		*pdwLen = pBuf - bufOut;
+
+		CloseHandle(hOutRead);
+		hOutRead = 0;
+		bRet = TRUE;
+		break;
+	}
+	CloseHandle(hOutRead);
+	CloseHandle(hOutWrite);
+	return bRet;
+}
+
+BOOL GetRawFileName(LPCTSTR szFile, LPTSTR bufOut)
+{
+	// Expand env and find szFile in %PATH%
+	TCHAR bufCMD[MAX_PATH];
+	LPCTSTR fmt = _T("@echo off & for %%i in (\"%s\") do (\
+		if \"%%~$PATH:i\"==\"\" (echo.) else (echo %%~$PATH:i))");
+	_stprintf(bufCMD, fmt, szFile);
+	BYTE buf[MAX_PATH];
+	DWORD dwLen = sizeof(buf);
+	BOOL bRet = ShellCMD(bufCMD, buf, &dwLen);
+	if (!bRet)
+		return FALSE;
+	// Trim right
+	for (BYTE * p = buf + dwLen - 1; p >= buf; p--)
+	{
+		if (0 == strchr("\r\n\t ", *p))
+			break;
+		*p = 0;
+	}
+	if (*buf == 0)
+		return FALSE;
+	MultiByteToWideChar(CP_ACP, 0, (LPCSTR)buf, dwLen + 1, bufOut, MAX_PATH);
+	return TRUE;
+}
+
 HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile);
 HRESULT ShellLinkSetLinksIcon(IShellLink * psl, LPCTSTR szFile)
 {
@@ -157,18 +254,45 @@ HRESULT ShellLinkSetLinksIcon(IShellLink * psl, LPCTSTR szFile)
 			{
 				dbg(_T("Browser: %s"), buf);
 				if (*bufTempHTML != 0)
-					ShellLinkSetIcon(psl, buf);
+					return ShellLinkSetIcon(psl, buf);
 			}
 		}
 	}
 	return hr;
 }
 
+HRESULT ShellLinkSetCMDsIcon(IShellLink * psl, LPCTSTR szFile)
+{
+	TCHAR bufNew[MAX_PATH];
+	BOOL bRet = GetRawFileName(szFile, bufNew);
+	if (bRet)
+	{
+		dbg(_T("Raw path 1: %s"), bufNew);
+		if (0 != _tcsicmp(bufNew, szFile))
+			return ShellLinkSetIcon(psl, bufNew);
+	}
+	// Try to append ".exe"
+	TCHAR bufExe[MAX_PATH];
+	_tcscpy(bufExe, szFile);
+	_tcscat(bufExe, _T(".exe"));
+	bRet = GetRawFileName(bufExe, bufNew);
+	if (bRet)
+	{
+		dbg(_T("Raw path 2: %s"), bufNew);
+		return psl->SetIconLocation(bufNew, 0);
+	}
+	return E_FAIL;
+}
+
 HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile)
 {
+	HRESULT hrRet = S_OK;  // No icon? Not a big deal.
+	HRESULT hr;
+
+	// Got default icon?
 	TCHAR buf[MAX_PATH];
 	DWORD dw = ARRAYSIZE(buf);
-	HRESULT hr = AssocQueryString(0, ASSOCSTR_DEFAULTICON,
+	 hr = AssocQueryString(0, ASSOCSTR_DEFAULTICON,
 		szFile, NULL, buf, &dw);
 	if (SUCCEEDED(hr))
 	{
@@ -194,17 +318,22 @@ HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile)
 				psl->SetIconLocation(buf, 0);
 			}
 		}
+		return hrRet;
 	}
-	else
-	{
-		hr = ShellLinkSetLinksIcon(psl, szFile);
-		if (SUCCEEDED(hr))
-		{
-			dbg(_T("Error: AssocQueryString, %s"), szFile);
-		}
-	}
-	// No icon? Not a big deal.
-	return S_OK;
+
+	// Is url?
+	hr = ShellLinkSetLinksIcon(psl, szFile);
+	if (SUCCEEDED(hr))
+		return hrRet;
+
+	// Others, try expand commandline and append ".exe"
+	hr = ShellLinkSetCMDsIcon(psl, szFile);
+	if (SUCCEEDED(hr))
+		return hrRet;
+
+	dbg(_T("Error: AssocQueryString, %s"), szFile);
+	psl->SetIconLocation(szFile, 0);
+	return hrRet;
 }
 
 HRESULT ShellLinkSetTitle(IShellLink * psl, LPCTSTR szTitle)
