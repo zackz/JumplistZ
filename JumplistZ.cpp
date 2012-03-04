@@ -20,7 +20,6 @@ https://github.com/zackz/JumplistZ
 #pragma comment(lib, "Ole32.lib")
 #pragma comment(lib, "Shell32.lib")
 #pragma comment(lib, "Shlwapi.lib")
-#pragma comment(lib, "Gdi32.lib")
 
 const TCHAR NAME[]                = _T("JumplistZ");
 const TCHAR VERSION[]             = _T("0.5.2");
@@ -115,263 +114,97 @@ void AddBackslash(LPTSTR bufPath)
 		_tcscat(bufPath, _T("\\"));
 }
 
-HRESULT GetDefaultAssocPath(LPCTSTR szExtra, LPTSTR bufPath)
+HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile);
+HRESULT ShellLinkSetLinksIcon(IShellLink * psl, LPCTSTR szFile)
 {
-	bufPath[0] = 0;
-	IEnumAssocHandlers * peah;
-	HRESULT hr = SHAssocEnumHandlers(szExtra, ASSOC_FILTER_RECOMMENDED, &peah);
-	if (SUCCEEDED(hr))
+	HRESULT hr = E_FAIL;
+	LPCTSTR prefixes[] = {_T("http://"), _T("https://")};
+	int i = 0;
+	for (; i < ARRAYSIZE(prefixes); i++)
+		if (0 == _tcsncicmp(szFile, prefixes[i], sizeof(prefixes[i])))
+			break;
+	if (i < ARRAYSIZE(prefixes))
 	{
-		IAssocHandler * pah;
-		hr = peah->Next(1, &pah, NULL);
-		if (SUCCEEDED(hr))
+		static TCHAR bufTempHTML[MAX_PATH] = {0};
+		if (*bufTempHTML == 0)
 		{
-			LPWSTR name;
-			hr = pah->GetName(&name);
+			if (0 == GetTempPath(MAX_PATH, bufTempHTML))
+			{
+				dbg(_T("Error: GetTempPath"));
+			}
+			else
+			{
+				AddBackslash(bufTempHTML);
+				_tcscat(bufTempHTML, _T("JumplistZs_dummy.html"));
+				FILE * f = _tfopen(bufTempHTML, _T("w"));
+				if (f)
+				{
+					LPCSTR txt = "JumplistZ's dummy HTML file.\n";
+					fwrite(txt, 1, strlen(txt), f);
+					fclose(f);
+				}
+				else
+					*bufTempHTML = 0;
+			}
+		}
+		if (*bufTempHTML != 0)
+		{
+			TCHAR buf[MAX_PATH];
+			DWORD dw = ARRAYSIZE(buf);
+			hr = AssocQueryString(0, ASSOCSTR_EXECUTABLE,
+				bufTempHTML, NULL, buf, &dw);
 			if (SUCCEEDED(hr))
 			{
-				_tcscpy(bufPath, name);
-				CoTaskMemFree(name);
+				dbg(_T("Browser: %s"), buf);
+				if (*bufTempHTML != 0)
+					ShellLinkSetIcon(psl, buf);
 			}
-			pah->Release();
 		}
-		peah->Release();
 	}
 	return hr;
 }
 
-// http://msdn.microsoft.com/en-us/library/ms997538.aspx
-// http://en.wikipedia.org/wiki/ICO_%28file_format%29
-#pragma pack(push)
-#pragma pack(1)
-typedef struct
-{
-	BYTE        bWidth;          // Width, in pixels, of the image
-	BYTE        bHeight;         // Height, in pixels, of the image
-	BYTE        bColorCount;     // Number of colors in image (0 if >=8bpp)
-	BYTE        bReserved;       // Reserved ( must be 0)
-	WORD        wPlanes;         // Color Planes
-	WORD        wBitCount;       // Bits per pixel
-	DWORD       dwBytesInRes;    // How many bytes in this resource?
-	DWORD       dwImageOffset;   // Where in the file is this image?
-} ICONDIRENTRY, *LPICONDIRENTRY;
-typedef struct
-{
-	WORD           idReserved;   // Reserved (must be 0)
-	WORD           idType;       // Resource Type (1 for icons)
-	WORD           idCount;      // How many images?
-	ICONDIRENTRY   idEntries[1]; // An entry for each image (idCount of 'em)
-} ICONDIR, *LPICONDIR;
-#pragma pack(pop)
-
-BOOL IconGetData(HICON hIcon, ICONDIRENTRY * pEntry, LPVOID * pRet)
-{
-	ICONINFO ii;
-	memset(&ii, 0, sizeof(ii));
-	HDC  hdc  = NULL;
-	BOOL bRet = FALSE;
-	*pRet = NULL;
-	while (TRUE)
-	{
-		if (!GetIconInfo(hIcon, &ii))
-		{
-			dbg(_T("Error: GetIconInfo, %d"), hIcon);
-			break;
-		}
-		hdc = CreateCompatibleDC(NULL);
-		if (hdc == NULL)
-		{
-			dbg(_T("Error: CreateCompatibleDC"));
-			break;
-		}
-
-		// GetDIBits might write data over bi.bmiHeader.biSize.
-		char bufBI[1024];
-		memset(&bufBI, 0, sizeof(bufBI));
-		BITMAPINFO &bi = (BITMAPINFO &)bufBI;
-		bi.bmiHeader.biSize = sizeof(bi);
-
-		// GetDIBits - 1
-		int n = GetDIBits(hdc, ii.hbmColor, 0, 0, NULL, &bi, DIB_RGB_COLORS);
-		if (n == 0)
-		{
-			dbg(_T("Error: GetDIBits - 1"));
-			break;
-		}
-		int nLenHeader = bi.bmiHeader.biSize;
-		int nLenColor  = bi.bmiHeader.biSizeImage;
-		int nLenMask   = (bi.bmiHeader.biWidth + 31) / 32 * 4 * bi.bmiHeader.biHeight;
-		int nLenData   = nLenHeader + nLenMask + nLenColor;
-
-		// Result buffer
-		*pRet = malloc(nLenData);
-		// Bitmap header
-		bi.bmiHeader.biCompression = BI_RGB;
-		memcpy(*pRet, &bi, nLenHeader);
-		((BITMAPINFO *)*pRet)->bmiHeader.biHeight *= 2;
-
-		// GetDIBits - 2
-		n = GetDIBits(hdc, ii.hbmColor, 0, bi.bmiHeader.biHeight,
-			(BYTE *)*pRet + nLenHeader, &bi, DIB_RGB_COLORS);
-		if (n != bi.bmiHeader.biHeight)
-		{
-			dbg(_T("Error: GetDIBits - 2, %d"), n);
-			break;
-		}
-
-		// GetDIBits - 3
-		bi.bmiHeader.biBitCount = 1;
-		n = GetDIBits(hdc, ii.hbmMask, 0, bi.bmiHeader.biHeight,
-			(BYTE *)*pRet + nLenHeader + nLenColor, &bi, DIB_RGB_COLORS);
-		if (n != bi.bmiHeader.biHeight)
-		{
-			dbg(_T("Error: GetDIBits - 3, %d"), n);
-			break;
-		}
-
-		// Icon entry
-		pEntry->bWidth        = bi.bmiHeader.biWidth;
-		pEntry->bHeight       = bi.bmiHeader.biHeight;
-		pEntry->bColorCount   = 0;
-		pEntry->bReserved     = 0;
-		pEntry->wPlanes       = 0;
-		pEntry->wBitCount     = 0;
-		pEntry->dwBytesInRes  = nLenData;
-		pEntry->dwImageOffset = 0; // <-- Caller sets it
-
-		// Done
-		bRet = TRUE;
-		break;
-	}
-	if (!bRet)
-	{
-		free(*pRet);
-		*pRet = NULL;
-	}
-	DeleteDC(hdc);
-	DeleteObject(ii.hbmMask);
-	DeleteObject(ii.hbmColor);
-	return bRet;
-}
-
-BOOL IconWriteToFile(HICON hIcon, LPCTSTR szFile)
-{
-	ICONDIR id;
-	LPVOID  pData;
-	if (!IconGetData(hIcon, id.idEntries, &pData))
-		return FALSE;
-	FILE * f = _tfopen(szFile, _T("wb"));
-	if (!f)
-	{
-		dbg(_T("Error: IconWriteToFile, _tfopen, %s"), szFile);
-		return FALSE;
-	}
-	id.idReserved = 0;
-	id.idType     = 1;
-	id.idCount    = 1;
-	id.idEntries[0].dwImageOffset = sizeof(id);
-	fwrite(&id, 1, sizeof(id), f);
-	fwrite(pData, 1, id.idEntries[0].dwBytesInRes, f);
-	fclose(f);
-	free(pData);
-	return TRUE;
-}
-
-void IconTestOnefile(LPCTSTR szFile)
-{
-	static int nIndex = 0;
-	dbg(_T("%d, %s"), ++nIndex, szFile);
-
-	UINT flags[] = {
-		SHGFI_ICON,
-		SHGFI_LARGEICON   | SHGFI_ICON,
-		SHGFI_LINKOVERLAY | SHGFI_ICON,
-		SHGFI_OPENICON    | SHGFI_ICON,
-		SHGFI_SELECTED    | SHGFI_ICON,
-		SHGFI_SMALLICON   | SHGFI_ICON
-	};
-	for (int i = 0; i < ARRAYSIZE(flags); i++)
-	{
-		TCHAR bufDest[MAX_PATH];
-		_stprintf(bufDest, _T("dumps\\Icon_%d_%d.ico"), nIndex, i);
-		dbg(_T("%s"), bufDest);
-
-		SHFILEINFO sfi;
-		if (0 != SHGetFileInfo(szFile, 0, &sfi, sizeof(sfi), flags[i]))
-		{
-			if (!IconWriteToFile(sfi.hIcon, bufDest))
-				dbg(_T("Error: IconWriteToFile"));
-			DestroyIcon(sfi.hIcon);
-		}
-		else
-			dbg(_T("Error: SHGetFileInfo"));
-	}
-}
-
-void IconTest()
-{
-	TCHAR bufPath[MAX_PATH];
-	SHGetSpecialFolderPath(0, bufPath, CSIDL_SYSTEM, FALSE);
-	AddBackslash(bufPath);
-	TCHAR bufFind[MAX_PATH];
-	_tcscpy(bufFind, bufPath);
-	_tcscat(bufFind, _T("*"));
-	WIN32_FIND_DATA wfd;
-	HANDLE h = FindFirstFile(bufFind, &wfd);
-	while (h != INVALID_HANDLE_VALUE)
-	{
-		TCHAR bufFile[MAX_PATH];
-		_tcscpy(bufFile, bufPath);
-		_tcscat(bufFile, wfd.cFileName);
-		IconTestOnefile(bufFile);
-		if (!FindNextFile(h, &wfd))
-		{
-			FindClose(h);
-			h = INVALID_HANDLE_VALUE;
-		}
-	}
-}
-
 HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile)
 {
+	TCHAR buf[MAX_PATH];
+	DWORD dw = ARRAYSIZE(buf);
+	HRESULT hr = AssocQueryString(0, ASSOCSTR_DEFAULTICON,
+		szFile, NULL, buf, &dw);
+	if (SUCCEEDED(hr))
+	{
+		dbg(_T("Default icon: %s"), buf);
+		if (0 == _tcsicmp(buf, _T("%1")))
+		{
+			dbg(_T("Icon: %s"), szFile);
+			psl->SetIconLocation(szFile, 0);
+		}
+		else
+		{
+			TCHAR * pch = _tcschr(buf, _T(','));
+			if (pch)
+			{
+				dw = _tstoi(pch + 1);
+				*pch = 0;
+				dbg(_T("Icon: %s, %d"), buf, dw);
+				psl->SetIconLocation(buf, dw);
+			}
+			else
+			{
+				dbg(_T("Icon: %s"), buf);
+				psl->SetIconLocation(buf, 0);
+			}
+		}
+	}
+	else
+	{
+		hr = ShellLinkSetLinksIcon(psl, szFile);
+		if (SUCCEEDED(hr))
+		{
+			dbg(_T("Error: AssocQueryString, %s"), szFile);
+		}
+	}
 	// No icon? Not a big deal.
-	HRESULT hrRet = S_OK;
-
-	// Temporary path
-	TCHAR bufTemp[MAX_PATH];
-	if (0 == GetTempPath(MAX_PATH, bufTemp))
-	{
-		dbg(_T("Error: GetTempPath"));
-		return hrRet;
-	}
-	AddBackslash(bufTemp);
-
-	// Hash
-	int hash = 0;
-	for (TCHAR *p = GetCommandLine(); *p; p++)
-		hash = hash * 31 + *p;
-
-	// Icon file path
-	static int nIndex = 1;
-	TCHAR bufIcoFile[MAX_PATH];
-	_stprintf(bufIcoFile, _T("%sJumplistZ_%08X_%d.ico"), bufTemp, hash, nIndex++);
-	dbg(bufIcoFile);
-
-	// Get icon
-	SHFILEINFO sfi;
-	memset(&sfi, 0, sizeof(sfi));
-	if (0 == SHGetFileInfo(szFile, 0, &sfi, sizeof(sfi),
-		SHGFI_SMALLICON | SHGFI_ICON))
-	{
-		dbg(_T("Error: SetIcon, SHGetFileInfo"));
-		return hrRet;
-	}
-
-	// Write icon
-	if (IconWriteToFile(sfi.hIcon, bufIcoFile))
-		psl->SetIconLocation(bufIcoFile, 0);
-	DestroyIcon(sfi.hIcon);
-	return hrRet;
+	return S_OK;
 }
 
 HRESULT ShellLinkSetTitle(IShellLink * psl, LPCTSTR szTitle)
@@ -505,13 +338,8 @@ void AddTasks(ICustomDestinationList * pcdl, TCHAR * szINI)
 		NULL, CLSCTX_INPROC_SERVER, IID_PPV_ARGS(&poc));
 	if (SUCCEEDED(hr))
 	{
-		TCHAR bufPath[MAX_PATH];
-		GetDefaultAssocPath(_T(".ini"), bufPath);
-		TCHAR bufCMD[MAX_PATH];
-		_stprintf(bufCMD, _T("%s %s"), bufPath, szINI);
-
 		IShellLink * psl;
-		psl = GetShellLink(_T("Edit configuration"), bufCMD);
+		psl = GetShellLink(_T("Edit configuration"), szINI);
 		if (psl)
 			poc->AddObject(psl);
 		//~ psl = GetShellLink(
