@@ -82,6 +82,7 @@ void SplitFileAndParameters(LPCTSTR szCMD, LPTSTR bufFile, LPTSTR bufParam)
 	/*
 	IN:
 		szCMD    = <   "file name" parameter1 parameter2 ...   >
+		           <    file_name  parameter1 parameter2 ...   >
 	OUT:
 		bufFile  = <file name>
 		bufParam = < parameter1 parameter2 ...   >
