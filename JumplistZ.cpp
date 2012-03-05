@@ -124,8 +124,8 @@ void AddBackslash(LPTSTR bufPath)
 BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
 {
 	/*
-	Run shell commands without console window, and retrieve output (stdout
-	& stderr). Not fully implement yet, apparently missing stdin, and using
+	Run shell commands without console window, and retrieve output (stdout &
+	stderr). Not fully implemented yet, apparently missing stdin, and using
 	same pipe in stdout and stderr.
 	Return TRUE after successful calling CreateProcess. "bufOut" is straight
 	output of commands which is ansi string in most case. And "bufOut" always
