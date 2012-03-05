@@ -80,11 +80,11 @@ void GetCFGItem(DWORD nSection, DWORD nItem,
 void SplitFileAndParameters(LPCTSTR szCMD, LPTSTR bufFile, LPTSTR bufParam)
 {
 	/*
-		IN:
-			szCMD    = <   "file name" parameter1 parameter2 ...   >
-		OUT:
-			bufFile  = <file name>
-			bufParam = < parameter1 parameter2 ...   >
+	IN:
+		szCMD    = <   "file name" parameter1 parameter2 ...   >
+	OUT:
+		bufFile  = <file name>
+		bufParam = < parameter1 parameter2 ...   >
 	*/
 	const TCHAR * pFile = szCMD;
 	while (_tcschr(_T(" \t"), *pFile))
@@ -124,12 +124,12 @@ void AddBackslash(LPTSTR bufPath)
 BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
 {
 	/*
-		Run shell commands without console window, and retrieve output (stdout
-		& stderr). Not fully implement yet, apparently missing stdin, and using
-		same pipe in stdout and stderr.
-		Return TRUE after successful calling CreateProcess. "bufOut" is straight
-		output of commands which is ansi string in most case. And "bufOut" always
-		inluded an additional null terminator which wasn't counted in "pwdLen".
+	Run shell commands without console window, and retrieve output (stdout
+	& stderr). Not fully implement yet, apparently missing stdin, and using
+	same pipe in stdout and stderr.
+	Return TRUE after successful calling CreateProcess. "bufOut" is straight
+	output of commands which is ansi string in most case. And "bufOut" always
+	inluded an additional null terminator which wasn't counted in "pwdLen".
 	*/
 	BOOL   bRet      = FALSE;
 	HANDLE hOutRead  = 0;
