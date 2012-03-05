@@ -519,11 +519,27 @@ int BuildJumplist(TCHAR * szINI)
 int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	LPSTR lpCmdLine, int nCmdShow)
 {
+	// Title of MessageBox, "JumplistZ X.X.X"
+	_stprintf(g_szAppName, _T("%s %s"), NAME, VERSION);
+
+	// Check os version
+	OSVERSIONINFOEX osvi;
+	ZeroMemory(&osvi, sizeof(osvi));
+	osvi.dwOSVersionInfoSize = sizeof(OSVERSIONINFOEX);
+	if (GetVersionEx((OSVERSIONINFO *) &osvi))
+	{
+		if (osvi.dwMajorVersion * 10 + osvi.dwMinorVersion < 61)
+		{
+			err(_T("Not supported. Jumplist is a new feature in Windows 7\n\
+https://github.com/zackz/JumplistZ"));
+			return 0;
+		}
+	}
+
+	// Get ini full path
 	TCHAR bufFile[CFG_VALUE_LEN];
 	TCHAR bufParam[CFG_VALUE_LEN];
 	SplitFileAndParameters(GetCommandLine(), bufFile, bufParam);
-
-	// Get ini full path
 	TCHAR szINI[MAX_PATH];
 	if (_tcsrchr(bufFile, _T('\\')) != 0)
 	{
@@ -538,9 +554,6 @@ int CALLBACK WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance,
 	}
 	*_tcsrchr(szINI, '.') = 0;  // Remove ".exe"
 	_tcscat(szINI, _T(".ini"));
-
-	// Title of MessageBox, "JumplistZ X.X.X"
-	_stprintf(g_szAppName, _T("%s %s"), NAME, VERSION);
 
 	// Not exists INI?
 	WIN32_FIND_DATA wfd;
