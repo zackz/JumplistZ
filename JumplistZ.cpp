@@ -79,6 +79,13 @@ void GetCFGItem(DWORD nSection, DWORD nItem,
 
 void SplitFileAndParameters(LPCTSTR szCMD, LPTSTR bufFile, LPTSTR bufParam)
 {
+	/*
+		IN:
+			szCMD    = <   "file name" parameter1 parameter2 ...   >
+		OUT:
+			bufFile  = <file name>
+			bufParam = < parameter1 parameter2 ...   >
+	*/
 	const TCHAR * pFile = szCMD;
 	while (_tcschr(_T(" \t"), *pFile))
 		pFile++;
@@ -114,10 +121,18 @@ void AddBackslash(LPTSTR bufPath)
 		_tcscat(bufPath, _T("\\"));
 }
 
-BOOL ShellCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
+BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
 {
-	BOOL bRet = FALSE;
-	HANDLE hOutRead = 0;
+	/*
+		Run shell commands without console window, and retrieve output (stdout
+		& stderr). Not fully implement yet, apparently missing stdin, and using
+		same pipe in stdout and stderr.
+		Return TRUE after successful calling CreateProcess. "bufOut" is straight
+		output of commands which is ansi string in most case. And "bufOut" always
+		inluded an additional null terminator which wasn't counted in "pwdLen".
+	*/
+	BOOL   bRet      = FALSE;
+	HANDLE hOutRead  = 0;
 	HANDLE hOutWrite = 0;
 	*bufOut = 0;
 	while (TRUE)
@@ -195,7 +210,7 @@ BOOL GetRawFileName(LPCTSTR szFile, LPTSTR bufOut)
 	_stprintf(bufCMD, fmt, szFile);
 	BYTE buf[MAX_PATH];
 	DWORD dwLen = sizeof(buf);
-	BOOL bRet = ShellCMD(bufCMD, buf, &dwLen);
+	BOOL bRet = SilentCMD(bufCMD, buf, &dwLen);
 	if (!bRet)
 		return FALSE;
 	// Trim right
