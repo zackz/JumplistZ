@@ -22,7 +22,7 @@ https://github.com/zackz/JumplistZ
 #pragma comment(lib, "Shlwapi.lib")
 
 const TCHAR NAME[]                = _T("JumplistZ");
-const TCHAR VERSION[]             = _T("0.5.2");
+const TCHAR VERSION[]             = _T("0.5.3");
 const TCHAR CFGKEY_DEBUG_BITS[]   = _T("DEBUG_BITS");
 const TCHAR CFGKEY_GROUP_NAME[]   = _T("GROUP_DISPLAY_NAME");
 const TCHAR SECTION_PROPERTIES[]  = _T("PROPERTIES");
@@ -91,12 +91,10 @@ void SplitFileAndParameters(LPCTSTR szCMD, LPTSTR bufFile, LPTSTR bufParam)
 	while (_tcschr(_T(" \t"), *pFile))
 		pFile++;
 	const TCHAR * pParam = pFile;
-	if (*pParam == _T('"'))
+	if (*pFile == _T('"'))
 	{
 		pFile++;
-		pParam++;
-		while (*pParam && *pParam != _T('"'))
-			pParam++;
+		pParam = _tcschr(pFile, _T('"'));
 	}
 	else
 	{
@@ -136,7 +134,7 @@ BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
 	HANDLE hOutRead  = 0;
 	HANDLE hOutWrite = 0;
 	*bufOut = 0;
-	while (TRUE)
+	do
 	{
 		SECURITY_ATTRIBUTES sa;
 		sa.nLength              = sizeof(SECURITY_ATTRIBUTES);
@@ -195,8 +193,9 @@ BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
 		CloseHandle(hOutRead);
 		hOutRead = 0;
 		bRet = TRUE;
-		break;
 	}
+	while (0);
+
 	CloseHandle(hOutRead);
 	CloseHandle(hOutWrite);
 	return bRet;
@@ -205,14 +204,13 @@ BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
 BOOL GetRawFileName(LPCTSTR szFile, LPTSTR bufOut)
 {
 	// Expand env and find szFile in %PATH%
-	TCHAR bufCMD[MAX_PATH];
-	LPCTSTR fmt = _T("@echo off & for %%i in (\"%s\") do (\
-		if \"%%~$PATH:i\"==\"\" (echo.) else (echo %%~$PATH:i))");
-	_stprintf(bufCMD, fmt, szFile);
-	BYTE buf[MAX_PATH];
+	BYTE  buf[MAX_PATH];
 	DWORD dwLen = sizeof(buf);
-	BOOL bRet = SilentCMD(bufCMD, buf, &dwLen);
-	if (!bRet)
+	TCHAR bufCMD[MAX_PATH * 2];
+	LPCTSTR fmt = _T("@echo off & for %%i in (\"%s\") do (\
+		if not \"%%~$PATH:i\"==\"\" (echo %%~$PATH:i))");
+	_stprintf(bufCMD, fmt, szFile);
+	if (!SilentCMD(bufCMD, buf, &dwLen))
 		return FALSE;
 	// Trim right
 	for (BYTE * p = buf + dwLen - 1; p >= buf; p--)
@@ -236,42 +234,43 @@ HRESULT ShellLinkSetLinksIcon(IShellLink * psl, LPCTSTR szFile)
 	for (; i < ARRAYSIZE(prefixes); i++)
 		if (0 == _tcsncicmp(szFile, prefixes[i], sizeof(prefixes[i])))
 			break;
-	if (i < ARRAYSIZE(prefixes))
+	if (i == ARRAYSIZE(prefixes))
+		return hr;
+
+	static TCHAR bufTempHTML[MAX_PATH] = {0};
+	if (*bufTempHTML == 0)
 	{
-		static TCHAR bufTempHTML[MAX_PATH] = {0};
-		if (*bufTempHTML == 0)
+		if (0 == GetTempPath(MAX_PATH, bufTempHTML))
 		{
-			if (0 == GetTempPath(MAX_PATH, bufTempHTML))
+			dbg(_T("Error: GetTempPath"));
+		}
+		else
+		{
+			AddBackslash(bufTempHTML);
+			_tcscat(bufTempHTML, _T("JumplistZs_dummy.html"));
+			FILE * f = _tfopen(bufTempHTML, _T("w"));
+			if (f)
 			{
-				dbg(_T("Error: GetTempPath"));
+				LPCSTR txt = "JumplistZ's dummy HTML file.\n";
+				fwrite(txt, 1, strlen(txt), f);
+				fclose(f);
 			}
 			else
-			{
-				AddBackslash(bufTempHTML);
-				_tcscat(bufTempHTML, _T("JumplistZs_dummy.html"));
-				FILE * f = _tfopen(bufTempHTML, _T("w"));
-				if (f)
-				{
-					LPCSTR txt = "JumplistZ's dummy HTML file.\n";
-					fwrite(txt, 1, strlen(txt), f);
-					fclose(f);
-				}
-				else
-					*bufTempHTML = 0;
-			}
+				*bufTempHTML = 0;
 		}
-		if (*bufTempHTML != 0)
+	}
+	if (*bufTempHTML != 0)
+	{
+		// Set browser's icon, not just associated icon
+		TCHAR buf[MAX_PATH];
+		DWORD dw = ARRAYSIZE(buf);
+		hr = AssocQueryString(0, ASSOCSTR_EXECUTABLE,
+			bufTempHTML, NULL, buf, &dw);
+		if (SUCCEEDED(hr))
 		{
-			TCHAR buf[MAX_PATH];
-			DWORD dw = ARRAYSIZE(buf);
-			hr = AssocQueryString(0, ASSOCSTR_EXECUTABLE,
-				bufTempHTML, NULL, buf, &dw);
-			if (SUCCEEDED(hr))
-			{
-				dbg(_T("Browser: %s"), buf);
-				if (*bufTempHTML != 0)
-					return ShellLinkSetIcon(psl, buf);
-			}
+			dbg(_T("Browser: %s"), buf);
+			if (*bufTempHTML != 0)
+				return ShellLinkSetIcon(psl, buf);
 		}
 	}
 	return hr;
@@ -381,7 +380,7 @@ IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 	dbg(_T("-CMD:  <%s>, <%s>"), bufFile, bufParam);
 
 	HRESULT hr = 0;
-	while (TRUE)
+	do
 	{
 		IShellLink * psl;
 		hr = CoCreateInstance(
@@ -414,6 +413,8 @@ IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 		if (FAILED(hr)) break;
 		return psl;
 	}
+	while (0);
+
 	dbg(_T("Error: GetShellLink, hr: 0x%08x"), hr);
 	return NULL;
 }
