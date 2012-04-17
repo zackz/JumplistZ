@@ -610,8 +610,8 @@ https://github.com/zackz/JumplistZ"));
 		int nObjects = BuildJumplist(szINI);
 		CoUninitialize();
 
-		// Result message. App path is included in message because defferent path
-		// leads to different jumplist even thought the executable file is same.
+		// Result message. App path is included in message because different path
+		// leads to different jumplist even though the executable file is same.
 		TCHAR buf[100 + MAX_PATH];
 		_stprintf(buf, _T("Updated jumplist. Total %d items.\nPath: \"%s\""),
 			nObjects, bufFile);
