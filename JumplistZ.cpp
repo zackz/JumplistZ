@@ -22,7 +22,7 @@ https://github.com/zackz/JumplistZ
 #pragma comment(lib, "Shlwapi.lib")
 
 const TCHAR NAME[]                = _T("JumplistZ");
-const TCHAR VERSION[]             = _T("0.5.3");
+const TCHAR VERSION[]             = _T("0.6.0");
 const TCHAR CFGKEY_DEBUG_BITS[]   = _T("DEBUG_BITS");
 const TCHAR CFGKEY_GROUP_NAME[]   = _T("GROUP_DISPLAY_NAME");
 const TCHAR SECTION_PROPERTIES[]  = _T("PROPERTIES");
@@ -34,6 +34,7 @@ const int   CFG_MAX_COUNT         = 100;
 const int   CFG_VALUE_LEN         = 1024;
 
 TCHAR g_szAppName[MAX_PATH];
+TCHAR g_szAppPath[MAX_PATH];
 DWORD g_dwDebugBits = 0;
 
 void dbg(LPCTSTR szFormat, ...)
@@ -88,7 +89,7 @@ void SplitFileAndParameters(LPCTSTR szCMD, LPTSTR bufFile, LPTSTR bufParam)
 		bufParam = < parameter1 parameter2 ...   >
 	*/
 	const TCHAR * pFile = szCMD;
-	while (_tcschr(_T(" \t"), *pFile))
+	while (*pFile && _tcschr(_T(" \t"), *pFile))
 		pFile++;
 	const TCHAR * pParam = pFile;
 	if (*pFile == _T('"'))
@@ -114,13 +115,7 @@ void SplitFileAndParameters(LPCTSTR szCMD, LPTSTR bufFile, LPTSTR bufParam)
 	}
 }
 
-void AddBackslash(LPTSTR bufPath)
-{
-	if (bufPath && *bufPath && bufPath[_tcslen(bufPath) - 1] != _T('\\'))
-		_tcscat(bufPath, _T("\\"));
-}
-
-BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
+BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut=NULL, DWORD * pdwLen=NULL)
 {
 	/*
 	Run shell commands without console window, and retrieve output (stdout &
@@ -133,7 +128,6 @@ BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
 	BOOL   bRet      = FALSE;
 	HANDLE hOutRead  = 0;
 	HANDLE hOutWrite = 0;
-	*bufOut = 0;
 	do
 	{
 		SECURITY_ATTRIBUTES sa;
@@ -174,21 +168,32 @@ BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
 		CloseHandle(hOutWrite);
 		hOutWrite = 0;
 
-		LPBYTE pBuf = bufOut;
-		DWORD dwBufLen = *pdwLen;
-		dwBufLen--;  // Save for null terminator
-		while (dwBufLen > 0)
+		bRet = TRUE;
+		if (bufOut && pdwLen)
 		{
-			DWORD dwRead;
-			bRet = ReadFile(hOutRead, pBuf, dwBufLen, &dwRead, NULL);
-			dbg(_T("CMD output: %d, %d, %d"), bRet, GetLastError(), dwRead);
-			if (!bRet)
-				break;
-			pBuf += dwRead;
-			dwBufLen -= dwRead;
+			LPBYTE pBuf = bufOut;
+			DWORD dwBufLen = *pdwLen - 1;
+			while (dwBufLen > 0)
+			{
+				DWORD dwRead;
+				bRet = ReadFile(hOutRead, pBuf, dwBufLen, &dwRead, NULL);
+				dbg(_T("CMD output: %d, %d, %d"), bRet, GetLastError(), dwRead);
+				if (!bRet)
+					break;
+				pBuf += dwRead;
+				dwBufLen -= dwRead;
+			}
+			*pBuf = 0;
+			*pdwLen = pBuf - bufOut;
 		}
-		*pBuf = 0;
-		*pdwLen = pBuf - bufOut;
+
+		// Read ramain data from pipe
+		while (bRet)
+		{
+			BYTE bufDummy[1024 * 128];
+			DWORD dwRead;
+			bRet = ReadFile(hOutRead, bufDummy, ARRAYSIZE(bufDummy), &dwRead, NULL);
+		}
 
 		CloseHandle(hOutRead);
 		hOutRead = 0;
@@ -199,30 +204,6 @@ BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut, DWORD * pdwLen)
 	CloseHandle(hOutRead);
 	CloseHandle(hOutWrite);
 	return bRet;
-}
-
-BOOL GetRawFileName(LPCTSTR szFile, LPTSTR bufOut)
-{
-	// Expand env and find szFile in %PATH%
-	BYTE  buf[MAX_PATH];
-	DWORD dwLen = sizeof(buf);
-	TCHAR bufCMD[MAX_PATH * 2];
-	LPCTSTR fmt = _T("@echo off & for %%i in (\"%s\") do (\
-		if not \"%%~$PATH:i\"==\"\" (echo %%~$PATH:i))");
-	_stprintf(bufCMD, fmt, szFile);
-	if (!SilentCMD(bufCMD, buf, &dwLen))
-		return FALSE;
-	// Trim right
-	for (BYTE * p = buf + dwLen - 1; p >= buf; p--)
-	{
-		if (0 == strchr("\r\n\t ", *p))
-			break;
-		*p = 0;
-	}
-	if (*buf == 0)
-		return FALSE;
-	MultiByteToWideChar(CP_ACP, 0, (LPCSTR)buf, dwLen + 1, bufOut, MAX_PATH);
-	return TRUE;
 }
 
 HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile);
@@ -246,8 +227,7 @@ HRESULT ShellLinkSetLinksIcon(IShellLink * psl, LPCTSTR szFile)
 		}
 		else
 		{
-			AddBackslash(bufTempHTML);
-			_tcscat(bufTempHTML, _T("JumplistZs_dummy.html"));
+			PathAppend(bufTempHTML, _T("JumplistZs_dummy.html"));
 			FILE * f = _tfopen(bufTempHTML, _T("w"));
 			if (f)
 			{
@@ -261,7 +241,7 @@ HRESULT ShellLinkSetLinksIcon(IShellLink * psl, LPCTSTR szFile)
 	}
 	if (*bufTempHTML != 0)
 	{
-		// Set browser's icon, not just associated icon
+		// Set browser's icon, not associated icon
 		TCHAR buf[MAX_PATH];
 		DWORD dw = ARRAYSIZE(buf);
 		hr = AssocQueryString(0, ASSOCSTR_EXECUTABLE,
@@ -279,24 +259,17 @@ HRESULT ShellLinkSetLinksIcon(IShellLink * psl, LPCTSTR szFile)
 HRESULT ShellLinkSetCMDsIcon(IShellLink * psl, LPCTSTR szFile)
 {
 	TCHAR bufNew[MAX_PATH];
-	BOOL bRet = GetRawFileName(szFile, bufNew);
-	if (bRet)
+	_tcscpy(bufNew, szFile);
+	if (!PathFindOnPath(bufNew, NULL))
 	{
-		dbg(_T("Raw path 1: %s"), bufNew);
-		if (0 != _tcsicmp(bufNew, szFile))
-			return ShellLinkSetIcon(psl, bufNew);
+		_tcscat(bufNew, _T(".exe"));
+		if (!PathFindOnPath(bufNew, NULL))
+		{
+			return E_FAIL;
+		}
 	}
-	// Try to append ".exe"
-	TCHAR bufExe[MAX_PATH];
-	_tcscpy(bufExe, szFile);
-	_tcscat(bufExe, _T(".exe"));
-	bRet = GetRawFileName(bufExe, bufNew);
-	if (bRet)
-	{
-		dbg(_T("Raw path 2: %s"), bufNew);
-		return psl->SetIconLocation(bufNew, 0);
-	}
-	return E_FAIL;
+	dbg(_T("ShellLinkSetCMDsIcon, found %s"), bufNew);
+	return ShellLinkSetIcon(psl, bufNew);
 }
 
 HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile)
@@ -347,7 +320,7 @@ HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile)
 		return hrRet;
 
 	dbg(_T("Error: AssocQueryString, %s"), szFile);
-	psl->SetIconLocation(szFile, 0);
+	psl->SetIconLocation(szFile, 0);  // %ComSpec%
 	return hrRet;
 }
 
@@ -371,13 +344,99 @@ HRESULT ShellLinkSetTitle(IShellLink * psl, LPCTSTR szTitle)
 	return hr;
 }
 
+BOOL GetProgramPathFromStartParameters(LPCTSTR szParam, LPTSTR bufOut)
+{
+	// Split parameters
+	BYTE  buf[CFG_VALUE_LEN * 2];
+	DWORD dwLen = sizeof(buf);
+	TCHAR bufCMD[CFG_VALUE_LEN * 2];
+	LPCTSTR fmt = _T("@echo off & for %%i in (%s) do (echo %%i)");
+	_stprintf(bufCMD, fmt, szParam);
+	if (!SilentCMD(bufCMD, buf, &dwLen))
+		return FALSE;
+
+	/*
+	START ["title"] [/D path] [/I] [/MIN] [/MAX] [/SEPARATE | /SHARED]
+	      [/LOW | /NORMAL | /HIGH | /REALTIME | /ABOVENORMAL | /BELOWNORMAL]
+	      [/NODE <NUMA node>] [/AFFINITY <hex affinity mask>] [/WAIT] [/B]
+	      [command/program] [parameters]
+	*/
+	BOOL bNODE = FALSE;
+	BOOL bAFFINITY = FALSE;
+	BOOL bD = FALSE;
+	char bufPath[MAX_PATH] = {0};
+	char bufProgram[MAX_PATH] = {0};
+	char * pStart = (char *)buf;
+	char * pEnd;
+	while (pEnd = strchr(pStart, '\n'))
+	{
+		*pEnd = 0;
+		if (pEnd - 1 >= 0 && *(pEnd - 1) == '\r')
+			*(pEnd - 1) = 0;
+		dbg(_T("Parameter:  <%S>"), pStart);
+
+		if (pStart == (char *)buf && *pStart == '"')
+		{
+			// "title"
+		}
+		else if (bD)
+		{
+			strcpy(bufPath, pStart);
+			bD = FALSE;
+		}
+		else if (bNODE || bAFFINITY)
+		{
+			bNODE = bAFFINITY = FALSE;
+		}
+		else if (0 == stricmp(pStart, "/D"))
+		{
+			bD = TRUE;
+		}
+		else if (0 == stricmp(pStart, "/NODE"))
+		{
+			bNODE = TRUE;
+		}
+		else if (0 == stricmp(pStart, "/AFFINITY"))
+		{
+			bAFFINITY = TRUE;
+		}
+		else if (*pStart == '/')
+		{
+			// Options without parameter
+		}
+		else
+		{
+			// command/program
+			strcpy(bufProgram, pStart);
+			break;
+		}
+		pStart = pEnd + 1;
+	}
+	PathUnquoteSpacesA(bufPath);
+	PathUnquoteSpacesA(bufProgram);
+	const char * bufOtherDirs[] = {bufPath, 0};
+	PathFindOnPathA(bufProgram, bufOtherDirs);
+	MultiByteToWideChar(CP_ACP, 0, bufProgram, strlen(bufProgram) + 1, bufOut, MAX_PATH);
+	dbg(_T("bufPath,    <%S>"), bufPath);
+	dbg(_T("bufProgram, <%S>"), bufProgram);
+	dbg(_T("Result,     <%s>"), bufOut);
+	return TRUE;
+}
+
 IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 {
 	TCHAR bufFile[CFG_VALUE_LEN];
 	TCHAR bufParam[CFG_VALUE_LEN];
+	TCHAR bufActualPath[MAX_PATH] = {0};
 	SplitFileAndParameters(szCMD, bufFile, bufParam);
 	dbg(_T("-Name: <%s>"), szName);
 	dbg(_T("-CMD:  <%s>, <%s>"), bufFile, bufParam);
+	if (0 == _tcsicmp(_T("start"), bufFile))
+	{
+		_tcscpy(bufFile, g_szAppPath);
+		GetProgramPathFromStartParameters(bufParam, bufActualPath);
+		dbg(_T("-CMD:  <%s>, <%s>"), bufFile, bufActualPath);
+	}
 
 	HRESULT hr = 0;
 	do
@@ -390,7 +449,7 @@ IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 		hr = psl->SetPath(bufFile);
 		if (FAILED(hr)) break;
 
-		hr = ShellLinkSetIcon(psl, bufFile);
+		hr = ShellLinkSetIcon(psl, *bufActualPath ? bufActualPath: bufFile);
 		if (FAILED(hr)) break;
 
 		hr = psl->SetArguments(bufParam);
@@ -419,7 +478,7 @@ IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 	return NULL;
 }
 
-IShellLink * GetShellLink(DWORD nSection, DWORD nItem, TCHAR * szINI)
+IShellLink * GetShellLinkFromINI(DWORD nSection, DWORD nItem, TCHAR * szINI)
 {
 	TCHAR bufCMD[CFG_VALUE_LEN];
 	GetCFGItem(nSection, nItem, ITEM_SUFFIX_CMD, szINI, bufCMD);
@@ -452,7 +511,7 @@ int AddGroup(ICustomDestinationList * pcdl, DWORD nSection, TCHAR * szINI)
 
 	for (int k = 1; k < CFG_MAX_COUNT; k++)
 	{
-		IShellLink * psi = GetShellLink(nSection, k, szINI);
+		IShellLink * psi = GetShellLinkFromINI(nSection, k, szINI);
 		if (psi)
 		{
 			dbg(_T("Shell object: 0x%08x"), psi);
@@ -557,20 +616,22 @@ https://github.com/zackz/JumplistZ"));
 	TCHAR bufFile[CFG_VALUE_LEN];
 	TCHAR bufParam[CFG_VALUE_LEN];
 	SplitFileAndParameters(GetCommandLine(), bufFile, bufParam);
+	_tfullpath(g_szAppPath, bufFile, MAX_PATH);
 	TCHAR szINI[MAX_PATH];
-	if (_tcsrchr(bufFile, _T('\\')) != 0)
-	{
-		_tcscpy(szINI, bufFile);
-	}
-	else
-	{
-		_tgetcwd(szINI, ARRAYSIZE(szINI));
-		AddBackslash(szINI);
-		_tcscat(szINI, bufFile);
-		_tcscpy(bufFile, szINI);  // Full path
-	}
+	_tcscpy(szINI, g_szAppPath);
 	*_tcsrchr(szINI, '.') = 0;  // Remove ".exe"
 	_tcscat(szINI, _T(".ini"));
+
+	// Has parameters?
+	const TCHAR * pParam = bufParam;
+	while (*pParam && _tcschr(_T(" \t"), *pParam))
+		pParam++;
+	if (*pParam)
+	{
+		TCHAR cmd[CFG_VALUE_LEN] = _T("start ");
+		_tcsncat(cmd, pParam, CFG_VALUE_LEN);
+		return SilentCMD(cmd) ? 0: -1;
+	}
 
 	// Not exists INI?
 	WIN32_FIND_DATA wfd;
@@ -614,10 +675,8 @@ https://github.com/zackz/JumplistZ"));
 		// leads to different jumplist even though the executable file is same.
 		TCHAR buf[100 + MAX_PATH];
 		_stprintf(buf, _T("Updated jumplist. Total %d items.\nPath: \"%s\""),
-			nObjects, bufFile);
+			nObjects, g_szAppPath);
 		MessageBox(NULL, buf, g_szAppName, MB_OK | MB_ICONINFORMATION);
 	}
 	return 0;
 }
-
-
