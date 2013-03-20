@@ -10,7 +10,7 @@ How to use
 
 * [Download](https://github.com/zackz/JumplistZ/downloads) and run JumplistZ.
 A sample jumplist will be generated.
-* Pin JumplistZ in taskbar. You'll see jumplist same as screenshot above.
+* Pin JumplistZ to the taskbar. You'll see jumplist same as screenshot above.
 * Click "Edit configuration" to customize jumplist.
 
 Customize jumplist
@@ -36,6 +36,8 @@ ITEM20_NAME = Print route (IPv4)
 ITEM20_CMD  = %ComSpec% /c route print -4 & pause
 ITEM30_NAME = PuTTY, SavedSession
 ITEM30_CMD  = ""c:\putty\PUTTY.EXE" -load "SavedSession" -pw "1234567890""
+ITEM40_NAME = Sample CMD window
+ITEM40_CMD  = start /max cmd
 [GROUP20]
 GROUP_DISPLAY_NAME = Sample Urls
 ITEM10_NAME = Welcome to my github
