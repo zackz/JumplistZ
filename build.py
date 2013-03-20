@@ -1,20 +1,29 @@
 import os
 import re
 
-if __name__ == '__main__':
+
+# -- Edit this first --
+PATH_SETENV = r'C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.Cmd'
+
+
+def main():
 	# Get new name
 	with open('JumplistZ.cpp') as f:
 		txt = f.read()
 	name = re.findall(r'\s+NAME\[\]\s*=\s*_T\("(.*?)"', txt)
-	ver = re.findall(r'\s+VERSION\[\]\s*=\s*_T\("(.*?)"', txt)
-	fnout = '%s-%s.exe' % (name[0], ver[0])
+	version = re.findall(r'\s+VERSION\[\]\s*=\s*_T\("(.*?)"', txt)
+	fnout = '%s-%s.exe' % (name[0], version[0])
+
 	# Build JumplistZ.exe
-	sdkenv = r'C:\Program Files\Microsoft SDKs\Windows\v7.1\Bin\SetEnv.Cmd'
 	cmds = [
-		'call "%s" /release /x86 /xp' % sdkenv,
+		'call "%s" /release /x86 /xp' % PATH_SETENV,
 		'rc JumplistZ.rc',
 		'cl JumplistZ.cpp',
 		'link JumplistZ.obj JumplistZ.res /out:%s' % fnout,
 		]
 	ret = os.system(' && '.join(cmds))
 	print 'ret: %d' % ret
+
+
+if __name__ == '__main__':
+	main()
