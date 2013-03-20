@@ -168,39 +168,49 @@ BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut=NULL, DWORD * pdwLen=NULL)
 		CloseHandle(hOutWrite);
 		hOutWrite = 0;
 
-		bRet = TRUE;
-		if (bufOut && pdwLen)
+		LPBYTE pBuf = bufOut;
+		DWORD dwBufLen = bufOut ? *pdwLen - 1: 0;
+		BYTE bufDummy[1024 * 32];
+		DWORD dwRead;
+		DWORD dw;
+		BOOL b;
+		while (1)
 		{
-			LPBYTE pBuf = bufOut;
-			DWORD dwBufLen = *pdwLen - 1;
-			while (dwBufLen > 0)
+			if (!PeekNamedPipe(hOutRead, NULL, 0, NULL, &dw, NULL))
+				break;
+			if (dw == 0)
 			{
-				DWORD dwRead;
-				bRet = ReadFile(hOutRead, pBuf, dwBufLen, &dwRead, NULL);
-				dbg(_T("CMD output: %d, %d, %d"), bRet, GetLastError(), dwRead);
-				if (!bRet)
+				b = GetExitCodeProcess(pi.hProcess, &dw);
+				if (b && dw != STILL_ACTIVE)
+					break;
+				Sleep(200);
+				continue;
+			}
+
+			dbg(_T("PeekNamedPipe, %d"), dw);
+			if (dwBufLen != 0)
+			{
+				if (!ReadFile(hOutRead, pBuf, dwBufLen, &dwRead, NULL))
 					break;
 				pBuf += dwRead;
 				dwBufLen -= dwRead;
 			}
+			else
+			{
+				if (!ReadFile(hOutRead, bufDummy, ARRAYSIZE(bufDummy), &dwRead, NULL))
+					break;
+			}
+		}
+		if (bufOut)
+		{
 			*pBuf = 0;
 			*pdwLen = pBuf - bufOut;
 		}
-
-		// Read ramain data from pipe
-		while (bRet)
-		{
-			BYTE bufDummy[1024 * 128];
-			DWORD dwRead;
-			bRet = ReadFile(hOutRead, bufDummy, ARRAYSIZE(bufDummy), &dwRead, NULL);
-		}
-
 		CloseHandle(hOutRead);
 		hOutRead = 0;
 		bRet = TRUE;
 	}
 	while (0);
-
 	CloseHandle(hOutRead);
 	CloseHandle(hOutWrite);
 	return bRet;
