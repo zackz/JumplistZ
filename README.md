@@ -44,9 +44,18 @@ ITEM10_NAME = Welcome to my github
 ITEM10_CMD  = https://github.com/zackz
 ```
 
-Run JumplistZ again to generate new jumplist after updating configurations.
+**Run JumplistZ again** to generate new jumplist after updating configurations.
 Configuration file is just plain text, and CMD line will be shown as tooltip in
 jumplist. So don't write any important password in this file.
+
+History
+=======
+
+* 0.6.1 Add compiled executable file to git repository.
+* 0.6.0 Support "start" command. Type `strat /?` in cmd.exe for command help.
+* 0.5.3 Check OS version before starting JumplistZ.
+* 0.5.2 More about retrieving right icon.
+* 0.5.1 First one in github.
 
 Tips
 ====
