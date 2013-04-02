@@ -8,7 +8,7 @@ A simple and easy configured jumplist creator.
 How to use
 ==========
 
-* [Download](https://github.com/zackz/JumplistZ/downloads) and run JumplistZ.
+* [Download](https://github.com/zackz/JumplistZ/tree/master/distribution) and run JumplistZ.
 A sample jumplist will be generated.
 * Pin JumplistZ to the taskbar. You'll see jumplist same as screenshot above.
 * Click "Edit configuration" to customize jumplist.
