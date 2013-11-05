@@ -22,8 +22,9 @@ https://github.com/zackz/JumplistZ
 #pragma comment(lib, "Shlwapi.lib")
 
 const TCHAR NAME[]                = _T("JumplistZ");
-const TCHAR VERSION[]             = _T("0.6.1");
+const TCHAR VERSION[]             = _T("0.6.2");
 const TCHAR CFGKEY_DEBUG_BITS[]   = _T("DEBUG_BITS");
+const TCHAR CFGKEY_EDITOR[]       = _T("EDITOR");
 const TCHAR CFGKEY_GROUP_NAME[]   = _T("GROUP_DISPLAY_NAME");
 const TCHAR SECTION_PROPERTIES[]  = _T("PROPERTIES");
 const TCHAR SECTION_PREFIX[]      = _T("GROUP");
@@ -554,13 +555,25 @@ void AddTasks(ICustomDestinationList * pcdl, TCHAR * szINI)
 	if (SUCCEEDED(hr))
 	{
 		IShellLink * psl;
-		psl = GetShellLink(_T("Edit configuration"), szINI);
+
+		TCHAR bufValue[MAX_PATH * 3] = _T("\"");
+		GetPrivateProfileString(SECTION_PROPERTIES, CFGKEY_EDITOR,
+			NULL, bufValue + 1, MAX_PATH, szINI);
+		if (_tcslen(bufValue) != 1)
+		{
+			_tcscat(bufValue, _T("\" \""));
+		}
+		_tcscat(bufValue, szINI);
+		_tcscat(bufValue, _T("\""));
+		psl = GetShellLink(_T("Edit configuration"), bufValue);
 		if (psl)
 			poc->AddObject(psl);
+
 		//~ psl = GetShellLink(
 			//~ _T("About JumplistZ"), _T("https://github.com/zackz/JumplistZ"));
 		//~ if (psl)
 			//~ poc->AddObject(psl);
+
 		pcdl->AddUserTasks(poc);
 	}
 }
