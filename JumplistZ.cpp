@@ -9,10 +9,7 @@ https://github.com/zackz/JumplistZ
 #include <stdio.h>
 #include <tchar.h>
 #include <windows.h>
-#include <objbase.h>
 #include <Shlobj.h>
-#include <shobjidl.h>
-#include <Knownfolders.h>
 #include <propkey.h>
 #include <Propvarutil.h>
 
@@ -217,7 +214,33 @@ BOOL SilentCMD(LPCTSTR szCMD, LPBYTE bufOut=NULL, DWORD * pdwLen=NULL)
 	return bRet;
 }
 
+BOOL IsFile(LPCTSTR szFile)
+{
+	WIN32_FIND_DATA wfd;
+	if (INVALID_HANDLE_VALUE == FindFirstFile(szFile, &wfd))
+		return FALSE;
+	return !(FILE_ATTRIBUTE_DIRECTORY & wfd.dwFileAttributes);
+}
+
 HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile);
+
+HRESULT ShellLinkSetOpenerIcon(IShellLink * psl, LPCTSTR szFile)
+{
+	HRESULT hr = E_FAIL;
+	TCHAR buf[MAX_PATH];
+	DWORD dw = ARRAYSIZE(buf);
+	hr = AssocQueryString(0, ASSOCSTR_EXECUTABLE, szFile, NULL, buf, &dw);
+	if (SUCCEEDED(hr))
+	{
+		dbg(_T("Opener: %s"), buf);
+		if (0 == _tcscmp(buf, _T("%1")))
+			return E_FAIL;  // *.exe, *.bat, ...
+		else
+			return ShellLinkSetIcon(psl, buf);
+	}
+	return hr;
+}
+
 HRESULT ShellLinkSetLinksIcon(IShellLink * psl, LPCTSTR szFile)
 {
 	HRESULT hr = E_FAIL;
@@ -252,17 +275,7 @@ HRESULT ShellLinkSetLinksIcon(IShellLink * psl, LPCTSTR szFile)
 	}
 	if (*bufTempHTML != 0)
 	{
-		// Set browser's icon, not associated icon
-		TCHAR buf[MAX_PATH];
-		DWORD dw = ARRAYSIZE(buf);
-		hr = AssocQueryString(0, ASSOCSTR_EXECUTABLE,
-			bufTempHTML, NULL, buf, &dw);
-		if (SUCCEEDED(hr))
-		{
-			dbg(_T("Browser: %s"), buf);
-			if (*bufTempHTML != 0)
-				return ShellLinkSetIcon(psl, buf);
-		}
+		return ShellLinkSetOpenerIcon(psl, bufTempHTML);
 	}
 	return hr;
 }
@@ -288,10 +301,34 @@ HRESULT ShellLinkSetIcon(IShellLink * psl, LPCTSTR szFile)
 	HRESULT hrRet = S_OK;  // No icon? Not a big deal.
 	HRESULT hr;
 
+	dbg(_T("ShellLinkSetIcon, <%s>"), szFile);
+
+	// Try to find opener's icon, such as *.py *.html
+	if (IsFile(szFile))
+	{
+		LPCTSTR use_original_icon[] = {
+			//~ _T(".ini"),
+			//~ _T(".log"),
+			NULL
+		};
+		LPCTSTR * p = use_original_icon;
+		for (; *p; p++)
+		{
+			if (0 == _tcsicmp(szFile + _tcslen(szFile) - _tcslen(*p), *p))
+				break;
+		}
+		if (!*p)
+		{
+			hr = ShellLinkSetOpenerIcon(psl, szFile);
+			if (SUCCEEDED(hr))
+				return hrRet;
+		}
+	}
+
 	// Got default icon?
 	TCHAR buf[MAX_PATH];
 	DWORD dw = ARRAYSIZE(buf);
-	 hr = AssocQueryString(0, ASSOCSTR_DEFAULTICON,
+	hr = AssocQueryString(0, ASSOCSTR_DEFAULTICON,
 		szFile, NULL, buf, &dw);
 	if (SUCCEEDED(hr))
 	{
@@ -497,7 +534,7 @@ IShellLink * GetShellLinkFromINI(DWORD nSection, DWORD nItem, TCHAR * szINI)
 		return NULL;
 	TCHAR bufName[CFG_VALUE_LEN];
 	GetCFGItem(nSection, nItem, ITEM_SUFFIX_NAME, szINI, bufName);
-	dbg(_T("GetShellLink, section: %d, item: %d"), nSection, nItem);
+	dbg(_T("> GetShellLink, section: %d, item: %d"), nSection, nItem);
 	return GetShellLink(bufName, bufCMD);
 }
 
