@@ -473,10 +473,18 @@ BOOL GetProgramPathFromStartParameters(LPCTSTR szParam, LPTSTR bufOut)
 
 IShellLink * GetShellLink(LPCTSTR szName, LPCTSTR szCMD)
 {
-	TCHAR bufFile[CFG_VALUE_LEN];
-	TCHAR bufParam[CFG_VALUE_LEN];
+	TCHAR bufFile[CFG_VALUE_LEN]  = {0};
+	TCHAR bufParam[CFG_VALUE_LEN] = {0};
 	TCHAR bufActualPath[MAX_PATH] = {0};
-	SplitFileAndParameters(szCMD, bufFile, bufParam);
+	if (IsFile(szCMD))
+	{
+		// Just a file path. It may include space char.
+		_tcscpy(bufFile, szCMD);
+	}
+	else
+	{
+		SplitFileAndParameters(szCMD, bufFile, bufParam);
+	}
 	dbg(_T("-Name: <%s>"), szName);
 	dbg(_T("-CMD:  <%s>, <%s>"), bufFile, bufParam);
 	if (0 == _tcsicmp(_T("start"), bufFile))
