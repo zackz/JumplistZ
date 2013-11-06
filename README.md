@@ -19,7 +19,14 @@ Customize jumplist
 All JumplistZ's configurations saved in ini file. The file name is same as executable
 file except extended name is ini.
 
-In ini file:
+Configuration opener:
+
+```ini
+[PROPERTIES]
+EDITOR=C:\wscite\SciTE.exe
+```
+
+Commands:
 
 * Keys with suffix `_NAME` will display on jumplist.
 * Keys with suffix `_CMD` is command which jumplist triggered.
