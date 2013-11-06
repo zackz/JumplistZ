@@ -1,6 +1,11 @@
 Changes
 =======
 
+* 0.6.2
+Use configured editor to open configuration file.
+Prefer to use file's opener's icon.
+Deal with file path without qoutes.
+
 * 0.6.1
 Add compiled executable file to git repository.
 
